@@ -139,11 +139,10 @@ option and is not used by the container.
 
 ## Automatic deployment from GitHub
 
-The repository includes `cloudbuild.yaml`. A Cloud Build trigger can use it to
-build a commit, push the image to Artifact Registry, and update the existing
-`flight-check` Cloud Run Job. Only the container image changes, so the job's
-environment variables, Secret Manager mappings, GCS state, and Tuesday
-Scheduler trigger remain intact.
+The repository includes `cloudbuild.yaml`. A Cloud Build trigger uses it to
+build a commit, push the image to Artifact Registry, and deploy the
+`flight-check` Cloud Run Job. The first build creates the job and its Tuesday
+9:00 AM Scheduler trigger; later builds update both without creating duplicates.
 
 First configure the dedicated build service account:
 

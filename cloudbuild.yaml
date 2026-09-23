@@ -13,23 +13,75 @@ steps:
       - push
       - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
 
-  - id: Update Cloud Run job
+  - id: Deploy Cloud Run job
     name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
     entrypoint: gcloud
     args:
       - run
       - jobs
-      - update
+      - deploy
       - ${_JOB_NAME}
       - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_IMAGE}:$COMMIT_SHA
       - --region=${_REGION}
+      - --service-account=${_JOB_SERVICE_ACCOUNT}@$PROJECT_ID.iam.gserviceaccount.com
+      - --task-timeout=10m
+      - --memory=2Gi
+      - --cpu=1
+      - --max-retries=1
+      - --set-env-vars=FLIGHT_ORIGIN=${_FLIGHT_ORIGIN},FLIGHT_DESTINATION=${_FLIGHT_DESTINATION},FLIGHT_DEPARTURE=${_FLIGHT_DEPARTURE},FLIGHT_RETURN=${_FLIGHT_RETURN},FLIGHT_ADULTS=1,FLIGHT_FLEXIBLE=true,USE_LLM=true,TELEGRAM_NOTIFY=true,NOTIFY_MODE=change,STATE_BUCKET=${_STATE_BUCKET},OPENAI_MODEL=gpt-4o-mini
+      - --set-secrets=OPENAI_API_KEY=openai-api-key:latest,TELEGRAM_BOT_TOKEN=telegram-bot-token:latest,TELEGRAM_CHAT_ID=telegram-chat-id:latest
       - --quiet
+
+  - id: Configure Tuesday schedule
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk:slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        RUNTIME_ACCOUNT="${_JOB_SERVICE_ACCOUNT}@$PROJECT_ID.iam.gserviceaccount.com"
+        RUN_URI="https://run.googleapis.com/v2/projects/$PROJECT_ID/locations/${_REGION}/jobs/${_JOB_NAME}:run"
+
+        gcloud run jobs add-iam-policy-binding "${_JOB_NAME}" \
+          --region "${_REGION}" \
+          --member "serviceAccount:$${RUNTIME_ACCOUNT}" \
+          --role roles/run.invoker \
+          --quiet
+
+        if gcloud scheduler jobs describe "${_SCHEDULER_JOB_NAME}" \
+          --location "${_REGION}" >/dev/null 2>&1; then
+          gcloud scheduler jobs update http "${_SCHEDULER_JOB_NAME}" \
+            --location "${_REGION}" \
+            --schedule "${_SCHEDULER_SCHEDULE}" \
+            --time-zone "${_SCHEDULER_TIME_ZONE}" \
+            --uri "$${RUN_URI}" \
+            --http-method POST \
+            --oauth-service-account-email "$${RUNTIME_ACCOUNT}" \
+            --quiet
+        else
+          gcloud scheduler jobs create http "${_SCHEDULER_JOB_NAME}" \
+            --location "${_REGION}" \
+            --schedule "${_SCHEDULER_SCHEDULE}" \
+            --time-zone "${_SCHEDULER_TIME_ZONE}" \
+            --uri "$${RUN_URI}" \
+            --http-method POST \
+            --oauth-service-account-email "$${RUNTIME_ACCOUNT}" \
+            --quiet
+        fi
 
 substitutions:
   _REGION: us-west1
   _REPOSITORY: flight-project
   _IMAGE: flight-check
   _JOB_NAME: flight-check
+  _JOB_SERVICE_ACCOUNT: flight-check-runner
+  _STATE_BUCKET: dorrie-test-project-flight-check-state
+  _FLIGHT_ORIGIN: SFO
+  _FLIGHT_DESTINATION: WUH
+  _FLIGHT_DEPARTURE: '2027-01-04'
+  _FLIGHT_RETURN: '2027-02-08'
+  _SCHEDULER_JOB_NAME: flight-check-tuesday-9am
+  _SCHEDULER_SCHEDULE: '0 9 * * 2'
+  _SCHEDULER_TIME_ZONE: America/Los_Angeles
 
 options:
   logging: CLOUD_LOGGING_ONLY
