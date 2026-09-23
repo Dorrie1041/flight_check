@@ -19,6 +19,10 @@ gcloud iam service-accounts describe "${BUILD_ACCOUNT}" >/dev/null 2>&1 || \
   gcloud iam service-accounts create "${BUILD_ACCOUNT_NAME}" \
     --display-name "Flight check Cloud Build deployer"
 
+gcloud iam service-accounts describe "${RUNTIME_ACCOUNT}" >/dev/null 2>&1 || \
+  gcloud iam service-accounts create flight-check-runner \
+    --display-name "Flight check runner"
+
 for role in roles/artifactregistry.writer roles/run.admin roles/logging.logWriter; do
   gcloud projects add-iam-policy-binding "${GCP_PROJECT}" \
     --member "serviceAccount:${BUILD_ACCOUNT}" \
