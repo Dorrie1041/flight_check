@@ -1,4 +1,4 @@
-# Flight Check
+# Flight Price Check 
 
 This project runs a headless Chromium browser, opens a live China Southern
 round-trip search, captures the rendered page and network responses, and asks an
