@@ -137,6 +137,35 @@ can override the defaults before deployment with `SCHEDULER_JOB_NAME`,
 The deployed job runs headlessly. `--show-browser` is only a local debugging
 option and is not used by the container.
 
+## Automatic deployment from GitHub
+
+The repository includes `cloudbuild.yaml`. A Cloud Build trigger can use it to
+build a commit, push the image to Artifact Registry, and update the existing
+`flight-check` Cloud Run Job. Only the container image changes, so the job's
+environment variables, Secret Manager mappings, GCS state, and Tuesday
+Scheduler trigger remain intact.
+
+First configure the dedicated build service account:
+
+```bash
+export GCP_PROJECT="your-project-id"
+export GCP_REGION="us-west1"
+chmod +x setup_cloud_build.sh
+./setup_cloud_build.sh
+```
+
+Then connect `Dorrie1041/flight_check` under Cloud Build > Repositories and
+create a trigger with these settings:
+
+- Name: `flight-check-main`
+- Event: push to a branch
+- Branch pattern: `^main$`
+- Configuration: `cloudbuild.yaml`
+- Region: `us-west1`
+- Service account: the account printed by `setup_cloud_build.sh`
+
+After setup, every push to `main` automatically updates the Cloud Run Job.
+
 ## Search another route or country
 
 Use three-letter IATA airport codes. For example:
